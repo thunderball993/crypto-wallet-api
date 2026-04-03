@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Wallet Manager</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        h2 {
+            margin-top: 0;
+            color: #555;
+            font-size: 1.3em;
+        }
+        input, button {
+            padding: 8px 12px;
+            margin: 5px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+        .error {
+            color: red;
+        }
+        .success {
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💰 Crypto Wallet Manager</h1>
+
+        <!-- Секция создания кошелька -->
+        <div class="section">
+            <h2>📌 Создать кошелёк</h2>
+            <input type="text" id="walletName" placeholder="Название кошелька">
+            <input type="number" id="initialBalance" placeholder="Начальный баланс" step="0.01">
+            <button onclick="createWallet()">Создать</button>
+            <div id="createResult"></div>
+        </div>
+
+        <!-- Секция просмотра баланса -->
+        <div class="section">
+            <h2>🔍 Проверить баланс</h2>
+            <input type="text" id="checkWallet" placeholder="Имя кошелька (оставьте пустым для общего)">
+            <button onclick="getBalance()">Показать баланс</button>
+            <pre id="balanceResult"></pre>
+        </div>
+
+        <!-- Секция добавления дохода -->
+        <div class="section">
+            <h2>➕ Добавить доход</h2>
+            <input type="text" id="incomeWallet" placeholder="Кошелёк">
+            <input type="number" id="incomeAmount" placeholder="Сумма" step="0.01">
+            <input type="text" id="incomeDesc" placeholder="Описание (необязательно)">
+            <button onclick="addIncome()">Добавить доход</button>
+            <div id="incomeResult"></div>
+        </div>
+
+        <!-- Секция добавления расхода -->
+        <div class="section">
+            <h2>➖ Добавить расход</h2>
+            <input type="text" id="expenseWallet" placeholder="Кошелёк">
+            <input type="number" id="expenseAmount" placeholder="Сумма" step="0.01">
+            <input type="text" id="expenseDesc" placeholder="Описание (необязательно)">
+            <button onclick="addExpense()">Списать расход</button>
+            <div id="expenseResult"></div>
+        </div>
+    </div>
+
+    <script>
+        // Базовый URL API (пустой, так как фронт на том же хосте)
+        const API_BASE = '';
+
+        // Вспомогательная функция для отправки запросов
+        async function apiCall(endpoint, method, body = null) {
+            const options = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            };
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+            try {
+                const response = await fetch(`${API_BASE}${endpoint}`, options);
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || JSON.stringify(data));
+                }
+                return { success: true, data };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+
+        // Создание кошелька
+        async function createWallet() {
+            const name = document.getElementById('walletName').value.trim();
+            const initialBalance = parseFloat(document.getElementById('initialBalance').value);
+            if (!name) {
+                showResult('createResult', 'Введите название кошелька', true);
+                return;
+            }
+            if (isNaN(initialBalance)) {
+                showResult('createResult', 'Введите начальный баланс', true);
+                return;
+            }
+            const result = await apiCall('/wallets', 'POST', { name, initial_balance: initialBalance });
+            if (result.success) {
+                showResult('createResult', `Кошелёк "${name}" создан с балансом ${initialBalance}`, false);
+                document.getElementById('walletName').value = '';
+                document.getElementById('initialBalance').value = '';
+            } else {
+                showResult('createResult', result.error, true);
+            }
+        }
+
+        // Получение баланса
+        async function getBalance() {
+            const wallet = document.getElementById('checkWallet').value.trim();
+            let url = '/balance';
+            if (wallet) {
+                url += `?wallet_name=${encodeURIComponent(wallet)}`;
+            }
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'Ошибка');
+                document.getElementById('balanceResult').innerText = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('balanceResult').innerText = `Ошибка: ${error.message}`;
+            }
+        }
+
+        // Добавление дохода
+        async function addIncome() {
+            const wallet_name = document.getElementById('incomeWallet').value.trim();
+            const amount = parseFloat(document.getElementById('incomeAmount').value);
+            const description = document.getElementById('incomeDesc').value.trim() || null;
+            if (!wallet_name) {
+                showResult('incomeResult', 'Укажите название кошелька', true);
+                return;
+            }
+            if (isNaN(amount) || amount <= 0) {
+                showResult('incomeResult', 'Введите положительную сумму', true);
+                return;
+            }
+            const result = await apiCall('/operations/income', 'POST', { wallet_name, amount, description });
+            if (result.success) {
+                showResult('incomeResult', `Доход ${amount} добавлен. Новый баланс: ${result.data.new_balance}`, false);
+                document.getElementById('incomeWallet').value = '';
+                document.getElementById('incomeAmount').value = '';
+                document.getElementById('incomeDesc').value = '';
+            } else {
+                showResult('incomeResult', result.error, true);
+            }
+        }
+
+        // Добавление расхода
+        async function addExpense() {
+            const wallet_name = document.getElementById('expenseWallet').value.trim();
+            const amount = parseFloat(document.getElementById('expenseAmount').value);
+            const description = document.getElementById('expenseDesc').value.trim() || null;
+            if (!wallet_name) {
+                showResult('expenseResult', 'Укажите название кошелька', true);
+                return;
+            }
+            if (isNaN(amount) || amount <= 0) {
+                showResult('expenseResult', 'Введите положительную сумму', true);
+                return;
+            }
+            const result = await apiCall('/operations/expense', 'POST', { wallet_name, amount, description });
+            if (result.success) {
+                showResult('expenseResult', `Расход ${amount} списан. Новый баланс: ${result.data.new_balance}`, false);
+                document.getElementById('expenseWallet').value = '';
+                document.getElementById('expenseAmount').value = '';
+                document.getElementById('expenseDesc').value = '';
+            } else {
+                showResult('expenseResult', result.error, true);
+            }
+        }
+
+        function showResult(elementId, message, isError) {
+            const div = document.getElementById(elementId);
+            div.innerHTML = `<p class="${isError ? 'error' : 'success'}">${message}</p>`;
+            setTimeout(() => {
+                div.innerHTML = '';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
